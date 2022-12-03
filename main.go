@@ -17,6 +17,7 @@ var (
 	tests    = flagSet.Bool("tests", false, "load tests too")
 	exported = flagSet.Bool("exported", false, "inspect exported functions")
 	debug    = flagSet.Bool("debug", false, "debug prints")
+	mincalls = flagSet.Int("mincalls", 2, "minimum call sites to report func")
 )
 
 func main() {
@@ -34,7 +35,12 @@ func main1() int {
 		}
 		return 1
 	}
-	warns, err := check.UnusedParams(*tests, *exported, *debug, flagSet.Args()...)
+	warns, err := check.UnusedParams(check.Config{
+		Tests:    *tests,
+		Exported: *exported,
+		Debug:    *debug,
+		MinCalls: *mincalls,
+	}, flagSet.Args()...)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1

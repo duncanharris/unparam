@@ -28,20 +28,27 @@ import (
 
 // UnusedParams returns a list of human-readable issues that point out unused
 // function parameters.
-func UnusedParams(tests, exported, debug bool, args ...string) ([]string, error) {
+func UnusedParams(cfg Config, args ...string) ([]string, error) {
 	wd, err := os.Getwd()
 	if err != nil {
 		return nil, err
 	}
 	c := &Checker{
-		wd:       wd,
-		tests:    tests,
-		exported: exported,
+		wd:     wd,
+		Config: cfg,
 	}
-	if debug {
+	if cfg.Debug {
 		c.debugLog = os.Stderr
 	}
 	return c.lines(args...)
+}
+
+// Config specifies options for UnusedParams
+type Config struct {
+	Tests    bool // check test code?
+	Exported bool // check exported funcs?
+	Debug    bool // print debug output?
+	MinCalls int  // skip if func has less than this number of call sites
 }
 
 // Checker finds unused parameters in a program. You probably want to use
@@ -53,8 +60,7 @@ type Checker struct {
 
 	wd string
 
-	tests    bool
-	exported bool
+	Config
 	debugLog io.Writer
 
 	issues []Issue
@@ -90,7 +96,7 @@ var errorType = types.Universe.Lookup("error").Type()
 func (c *Checker) lines(args ...string) ([]string, error) {
 	cfg := &packages.Config{
 		Mode:  packages.LoadSyntax,
-		Tests: c.tests,
+		Tests: c.Tests,
 	}
 	pkgs, err := packages.Load(cfg, args...)
 	if err != nil {
@@ -150,7 +156,7 @@ func (c *Checker) ProgramSSA(prog *ssa.Program) {
 
 // CheckExportedFuncs sets whether to inspect exported functions
 func (c *Checker) CheckExportedFuncs(exported bool) {
-	c.exported = exported
+	c.Exported = exported
 }
 
 func (c *Checker) debug(format string, a ...interface{}) {
@@ -361,7 +367,7 @@ func (c *Checker) Check() ([]Issue, error) {
 		if pkg == nil { // not part of given pkgs
 			continue
 		}
-		if c.exported || fn.Pkg.Pkg.Name() == "main" {
+		if c.Exported || fn.Pkg.Pkg.Name() == "main" {
 			// we want exported funcs, or this is a main package so
 			// nothing is exported
 		} else if strings.Contains(fn.Name(), "$") {
@@ -574,7 +580,7 @@ resLoop:
 			}
 			count++
 		}
-		if count < 2 {
+		if count < c.MinCalls {
 			continue // require ignoring at least twice
 		}
 		name := paramDesc(i, res)
